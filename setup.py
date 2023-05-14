@@ -15,6 +15,7 @@ setup(
     author='Phantivia',
     author_email='phantivia@gmail.com',
     packages=find_packages(),
+    url = r'https://github.com/Phantivia/OpenAI_PTCompletion',
     classifiers=[
         'Development Status :: 3 - Alpha',
         'License :: OSI Approved :: MIT License',
