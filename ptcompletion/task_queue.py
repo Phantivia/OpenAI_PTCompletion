@@ -7,8 +7,8 @@ from .task import Task
 
 
 class TaskQueue:
-    def __init__(self, request_per_minute: int = 60, max_rounds: int = 3, log_file: str = "tasks.log") -> None:
-        self.request_per_minute = request_per_minute
+    def __init__(self, requests_per_minute: int = 60, max_rounds: int = 3, log_file: str = "tasks.log") -> None:
+        self.requests_per_minute = requests_per_minute
         manager = Manager()
         self.token_bucket = manager.Value("i", 1)
         self.max_rounds = max_rounds
@@ -18,11 +18,11 @@ class TaskQueue:
         self.token_request_queue = manager.Queue()
 
     def fill_token_bucket(self, token_request_queue):
-        fill_token_interval = 60 / self.request_per_minute
+        fill_token_interval = 60 / self.requests_per_minute
         while True:
             if token_request_queue.get():
                 with self.token_mutex:
-                    if self.token_bucket.get() < self.request_per_minute:
+                    if self.token_bucket.get() < self.requests_per_minute:
                         
                         self.token_bucket.set(self.token_bucket.get() + 1)
                         time.sleep(fill_token_interval)
