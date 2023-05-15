@@ -12,29 +12,28 @@ class Task:
     
     completed:bool = False
         
-    def __init__(self, id:str | int, messages:list[dict], validate:Callable[[str], bool], postprocess:Callable[[str], Any], generation_config:dict) -> None:
+    def __init__(self, id:str | int, messages:list[dict], generation_config:dict) -> None:
         
         self.id = id
         
         self.messages = messages
         self.input = self.preprocess(messages)
-        
-        self.validate = validate
-        self.postprocess = postprocess
         self.generation_config = generation_config
 
     @abstractmethod
-    def preprocess(self, messages) -> Any:
+    def preprocess(self, messages:list[dict]) -> Any:
         raise NotImplementedError
     
     @abstractmethod
     def query(self) -> str:
         raise NotImplementedError
 
-    def validate(completion) -> bool: 
+    @abstractmethod
+    def validate(self, completion:str) -> bool: 
         raise NotImplementedError
     
-    def postprocess(completion) -> dict: 
+    @abstractmethod
+    def postprocess(self, completion:str) -> dict: 
         raise NotImplementedError
     
     def run(self) -> None:
