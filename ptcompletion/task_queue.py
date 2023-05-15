@@ -3,29 +3,36 @@ from datetime import datetime
 from multiprocessing import Manager, Pool, Process, cpu_count, RLock
 from typing import Tuple
 
-from .task import Task
+from ptcompletion import Task
 
 
 class TaskQueue:
-    def __init__(self, requests_per_minute: int = 60, max_rounds: int = 3, log_file: str = "tasks.log") -> None:
+    def __init__(self, requests_per_minute: int = 60, max_rounds: int = 3, max_requests_per_proc = 16, log_file: str = "tasks.log") -> None:
         self.requests_per_minute = requests_per_minute
         manager = Manager()
-        self.token_bucket = manager.Value("i", 1)
+        self.quota_bucket = manager.Value("i", 1)
         self.max_rounds = max_rounds
         self.log_file = log_file
         self.token_mutex = manager.Lock()
         self.log_mutex = manager.Lock()
         self.token_request_queue = manager.Queue()
+        
+        self.max_requests_per_proc = max_requests_per_proc
+        
+        if self.requests_per_minute <= 60:
+            
+            self.fill_token_interval = 60 / self.requests_per_minute
+            self.add = 1.0
+        else:
+            self.fill_token_interval = 1.0
+            self.add = self.requests_per_minute / 60
 
     def fill_token_bucket(self, token_request_queue):
-        fill_token_interval = 60 / self.requests_per_minute
         while True:
             if token_request_queue.get():
                 with self.token_mutex:
-                    if self.token_bucket.get() < self.requests_per_minute:
-                        
-                        self.token_bucket.set(self.token_bucket.get() + 1)
-                        time.sleep(fill_token_interval)
+                    self.quota_bucket.set(self.quota_bucket.get() + self.add)
+                    time.sleep(self.fill_token_interval)
 
     def fill_token_bucket_process(self):
         fill_token_process = Process(target=self.fill_token_bucket, args=(self.token_request_queue,))
@@ -34,12 +41,14 @@ class TaskQueue:
 
     def get_token(self):
         with self.token_mutex:
-            if self.token_bucket.get() > 0:
-                self.token_bucket.set(self.token_bucket.get() - 1)
-                return True
+            quota = self.quota_bucket.get()
+            if quota > 1.0:
+                tokens = int(quota)
+                self.quota_bucket.set(quota - tokens)
+                return tokens
             else:
                 self.token_request_queue.put(True)
-                return False
+                return 0
 
     def start(self, tasks: list[Task]) -> None:
         
@@ -57,17 +66,19 @@ class TaskQueue:
             
             round_start_time = time.time()
 
-            with Pool(processes=cpu_count()) as pool:
+            with Pool(processes=cpu_count() * self.requests_per_minute) as pool:
                 round_tasks = []
 
                 while task_queue:
-                    if not self.get_token():  # Try to apply for token
+                    tokens = self.get_token()# Try to apply for token
+                    if tokens == 0:  
                         time.sleep(0.01)
-                        continue
-
-                    task = task_queue.pop(0)
-                    
-                    round_tasks.append(pool.apply_async(self.process_task, (task, )))
+                    else:
+                        for t in range(tokens):
+                            task = task_queue.pop(0)
+                            round_tasks.append(pool.apply_async(self.process_task, (task, )))
+                            if not task_queue:
+                                break
 
                 for result in round_tasks:
                     task = result.get()
@@ -96,9 +107,9 @@ class TaskQueue:
 
     def log(self, msg) -> None:
         
-        msg = f"[{datetime.now()}] " + msg 
+        msg = f"[{datetime.now()}] " + msg + "\n"
         print(msg)
         
         with self.log_mutex:
             with open(self.log_file, "a") as log_file:
-                log_file.write(msg + "\n")
+                log_file.write(msg)
