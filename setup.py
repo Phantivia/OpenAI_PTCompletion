@@ -8,7 +8,7 @@ with open(os.path.join(HERE, "README.md")) as fid:
 
 setup(
     name='ptcompletion',
-    version='0.1.2',
+    version='0.2.0',
     description='Parallel Tasks Completion for OpenAI API, and more.',
     long_description=README,
     long_description_content_type="text/markdown",

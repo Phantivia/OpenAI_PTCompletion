@@ -10,7 +10,7 @@ class TaskQueue:
     def __init__(self, requests_per_minute: int = 60, max_rounds: int = 3, max_requests_per_proc = 16, log_file: str = "tasks.log") -> None:
         self.requests_per_minute = requests_per_minute
         manager = Manager()
-        self.quota_bucket = manager.Value("i", 1)
+        self.quota_bucket = manager.Value("f", 1)
         self.max_rounds = max_rounds
         self.log_file = log_file
         self.token_mutex = manager.Lock()
@@ -66,7 +66,7 @@ class TaskQueue:
             
             round_start_time = time.time()
 
-            with Pool(processes=cpu_count() * self.requests_per_minute) as pool:
+            with Pool(processes=cpu_count() * self.max_requests_per_proc) as pool:
                 round_tasks = []
 
                 while task_queue:
@@ -108,8 +108,7 @@ class TaskQueue:
     def log(self, msg) -> None:
         
         msg = f"[{datetime.now()}] " + msg + "\n"
-        print(msg)
-        
         with self.log_mutex:
+            print(msg)
             with open(self.log_file, "a") as log_file:
                 log_file.write(msg)
